@@ -23,9 +23,8 @@ password = args.password
 icms_username = args.icms_user
 icms_password = args.icms_pass
 
-dc_smc = 'ec2-122-248-194-95.ap-southeast-1.compute.amazonaws.com'
-dr_smc = 'ec2-122-248-194-95.ap-southeast-1.compute.amazonaws.com'
 icms_url = 'https://icms.vpbank.com.vn/'
+# icms_url = 'http://127.0.0.1:8000/'
 
 
 def is_subnet(subnet):
@@ -131,16 +130,22 @@ def get_list_task(icms_username, icms_password):
     url = icms_url + api
     res = requests.get(url=url, auth=HTTPBasicAuth(icms_username, icms_password))
     if res.ok:
-        datalist = json.loads(res.text)['datalist']
-        getlist01 = list()
-        getlist02 = list()
-        if datalist:
-            getlist01 = [i for i in datalist if i[1] == 'SMC-DC']
-            getlist02 = [i for i in datalist if i[1] == 'SMC-DR']
-        return {'status': 'success', 'getlist01': getlist01, 'getlist02': getlist02}
+        cp_task = json.loads(res.text)['cp_task']
+        cp_smc = json.loads(res.text)['cp_smc']
+        task_smc_dc = list()
+        task_smc_dr = list()
+        cp_smc_dc = list()
+        cp_smc_dr = list()
+        if cp_task:
+            task_smc_dc = [i for i in cp_task if i[1] == 'SMC-DC']
+            task_smc_dr = [i for i in cp_task if i[1] == 'SMC-DR']
+        if cp_smc:
+             cp_smc_dc = [i for i in cp_smc if i[0] == 'SMC-DC']
+             cp_smc_dr = [i for i in cp_smc if i[0] == 'SMC-DR']
+        return {'status': 'success', 'task_smc_dc': task_smc_dc, 'task_smc_dr': task_smc_dr, 'cp_smc_dc': cp_smc_dc, 'cp_smc_dr': cp_smc_dr}
     else:
         return {'status': 'failed', 'message': res.text}
-    
+
 def update_task_status(icms_url, icms_username, icms_password, policy_id, status, message):
     api = 'api/cm/checkpoint/update-task-status'
     url = icms_url + api
@@ -234,11 +239,15 @@ def check_time_object(session, date, list_errors):
 def install_access_rule_smc_dc():
     get_list_task_result = get_list_task(icms_username, icms_password)
     if get_list_task_result['status'] == 'success':
-        datalist = get_list_task_result['getlist01']
+        datalist = get_list_task_result['task_smc_dc']
+        cp_smc = get_list_task_result['cp_smc_dc'][0]
+        smc_server = cp_smc[1]
+        layer = cp_smc[2]
+        section = cp_smc[3]
         list_policy = list()
         list_result = list()
         if datalist:
-            client_args = APIClientArgs(server=dc_smc)
+            client_args = APIClientArgs(server=smc_server)
             with APIClient(client_args) as session:
                 for item in datalist:
                     policy_id = item[0]
@@ -249,8 +258,7 @@ def install_access_rule_smc_dc():
                     destination = item[5]
                     service = item[6]
                     schedule = item[7]
-                    section = 'AUTO_CREATE_RULE'
-                    layer = f'{policy} Network'
+                    policy_layer = f'{policy} {layer}'
                     list_errors = list()
                     if session.check_fingerprint() is False:
                         list_errors.append("Check connectivity with the server")
@@ -311,7 +319,7 @@ def install_access_rule_smc_dc():
                                 "action": "Accept",
                                 "destination": destination,
                                 "source": source,
-                                "layer": layer,
+                                "layer": policy_layer,
                                 "service": service,
                                 "track": {
                                     "type": "log"
@@ -332,7 +340,7 @@ def install_access_rule_smc_dc():
                                 else:
                                     request_discard = session.api_call('discard', {})
                                     error = add_access_rule.error_message
-                                    list_result.append([policy_id, 'failed', f'Create rule failed - error: {error}'])
+                                    list_result.append([policy_id, 'Failed', f'Create rule failed - error: {error}'])
                             else:
                                 list_result.append([policy_id, 'Failed', list_errors])
                 for policy in set(list_policy):
@@ -364,11 +372,15 @@ def install_access_rule_smc_dc():
 def install_access_rule_smc_dr():
     get_list_task_result = get_list_task(icms_username, icms_password)
     if get_list_task_result['status'] == 'success':
-        datalist = get_list_task_result['getlist02']
+        datalist = get_list_task_result['task_smc_dr']
+        cp_smc = get_list_task_result['cp_smc_dr'][0]
+        smc_server = cp_smc[1]
+        layer = cp_smc[2]
+        section = cp_smc[3]
         list_policy = list()
         list_result = list()
         if datalist:
-            client_args = APIClientArgs(server=dr_smc)
+            client_args = APIClientArgs(server=smc_server)
             with APIClient(client_args) as session:
                 for item in datalist:
                     policy_id = item[0]
@@ -379,8 +391,7 @@ def install_access_rule_smc_dr():
                     destination = item[5]
                     service = item[6]
                     schedule = item[7]
-                    section = 'AUTO_CREATE_RULE'
-                    layer = f'{policy} Network'
+                    policy_layer = f'{policy} {layer}'
                     list_errors = list()
                     if session.check_fingerprint() is False:
                         list_errors.append("Check connectivity with the server")
@@ -441,7 +452,7 @@ def install_access_rule_smc_dr():
                                 "action": "Accept",
                                 "destination": destination,
                                 "source": source,
-                                "layer": layer,
+                                "layer": policy_layer,
                                 "service": service,
                                 "track": {
                                     "type": "log"
@@ -462,7 +473,7 @@ def install_access_rule_smc_dr():
                                 else:
                                     request_discard = session.api_call('discard', {})
                                     error = add_access_rule.error_message
-                                    list_result.append([policy_id, 'failed', f'Create rule failed - error: {error}'])
+                                    list_result.append([policy_id, 'Failed', f'Create rule failed - error: {error}'])
                             else:
                                 list_result.append([policy_id, 'Failed', list_errors])
                 for policy in set(list_policy):
