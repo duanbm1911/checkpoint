@@ -23,8 +23,8 @@ password = args.password
 icms_username = args.icms_user
 icms_password = args.icms_pass
 
-# icms_url = 'https://icms.vpbank.com.vn/'
-icms_url = 'http://127.0.0.1:8000/'
+icms_url = 'https://icms.vpbank.com.vn/'
+# icms_url = 'http://127.0.0.1:8000/'
 
 
 def is_subnet(subnet):
@@ -126,29 +126,35 @@ def create_service_object(session, service, list_errors):
             list_errors.append(add_service_result.error_message)
 
 def get_list_task(icms_username, icms_password):
-    api = 'api/cm/checkpoint/get-list-task'
-    url = icms_url + api
-    res = requests.get(url=url, auth=HTTPBasicAuth(icms_username, icms_password))
-    if res.ok:
-        data = json.loads(res.text)['data']
-        return {'status': 'success', 'data': data}
-    else:
-        return {'status': 'failed', 'message': res.text}
+    try:
+        api = 'api/cm/checkpoint/get-list-task'
+        url = icms_url + api
+        res = requests.get(url=url, auth=HTTPBasicAuth(icms_username, icms_password))
+        if res.ok:
+            data = json.loads(res.text)['data']
+            return {'status': 'success', 'data': data}
+        else:
+            return {'status': 'failed', 'message': res.text}
+    except Exception as error:
+        return {'status': 'failed', 'message': error}
 
 def update_task_status(icms_url, icms_username, icms_password, rule_id, status, message):
-    api = 'api/cm/checkpoint/update-task-status'
-    url = icms_url + api
-    data = {
-        'rule_id': rule_id,
-        'status': status,
-        'message': message
-    }
-    res = requests.post(url=url, data=data, auth=HTTPBasicAuth(icms_username, icms_password), verify=False)
-    if res.ok:
-        return {'status': 'success'}
-    else:
-        return {'status': 'failed', 'message': res.text}
-
+    try:
+        api = 'api/cm/checkpoint/update-task-status'
+        url = icms_url + api
+        data = {
+            'rule_id': rule_id,
+            'status': status,
+            'message': message
+        }
+        res = requests.post(url=url, data=data, auth=HTTPBasicAuth(icms_username, icms_password), verify=False)
+        if res.ok:
+            return {'status': 'success'}
+        else:
+            return {'status': 'failed', 'message': res.text}
+    except Exception as error:
+        return {'status': 'failed', 'message': error}
+    
 def check_host_object(session, host, list_errors):
     obj = str()
     get_all_hosts = session.gen_api_query("show-hosts", details_level="full")
@@ -317,28 +323,28 @@ def main():
                                 }
                                 if schedule:
                                     rule_data['time'] = schedule
-                                if not list_errors:
-                                    add_access_rule = session.api_call('add-access-rule', rule_data)
-                                    if add_access_rule.success:
-                                        publish_res = session.api_call("publish", {})
-                                        if publish_res.success:
-                                            list_policy.append(policy)
-                                            list_result.append([rule_id, policy, 'Success', ''])
-                                        else:
-                                            error = publish_res.error_message
-                                            list_result.append([rule_id, policy, 'Failed', f'Publish object failed - error: {error}'])
+                            if not list_errors:
+                                add_access_rule = session.api_call('add-access-rule', rule_data)
+                                if add_access_rule.success:
+                                    publish_res = session.api_call("publish", {})
+                                    if publish_res.success:
+                                        list_policy.append(policy)
+                                        list_result.append([rule_id, policy, 'Success', ''])
                                     else:
-                                        request_discard = session.api_call('discard', {})
-                                        discard_error_message = str()
-                                        if not request_discard.success:
-                                            discard_error_message = request_discard.error_message
-                                        error = add_access_rule.error_message
-                                        if discard_error_message:
-                                            list_result.append([rule_id, policy, 'Failed', f'Create rule failed - error: {error}, discard failed error: {discard_error_message}'])
-                                        else:
-                                            list_result.append([rule_id, policy, 'Failed', f'Create rule failed - error: {error}'])
+                                        error = publish_res.error_message
+                                        list_result.append([rule_id, policy, 'Failed', f'Publish object failed - error: {error}'])
                                 else:
-                                    list_result.append([rule_id, policy, 'Failed', list_errors])
+                                    request_discard = session.api_call('discard', {})
+                                    discard_error_message = str()
+                                    if not request_discard.success:
+                                        discard_error_message = request_discard.error_message
+                                    error = add_access_rule.error_message
+                                    if discard_error_message:
+                                        list_result.append([rule_id, policy, 'Failed', f'Create rule failed - error: {error}\nDiscard failed error: {discard_error_message}'])
+                                    else:
+                                        list_result.append([rule_id, policy, 'Failed', f'Create rule failed - error: {error}'])
+                            else:
+                                list_result.append([rule_id, policy, 'Failed', list_errors])
                     for policy in set(list_policy):
                         install_policy = session.api_call("install-policy", {"policy-package": policy})
                         if install_policy.success:
@@ -346,7 +352,7 @@ def main():
                         else:
                             list_policy_install_failed.append(policy)
                             error = install_policy.error_message
-                            print(f'Install policy: {policy} failed - error: {error}')
+                            print(f'\nInstall policy: {policy} failed - error: {error}')
             for item in list_result:
                 rule_id = item[0]
                 policy = item[1]
@@ -366,11 +372,11 @@ def main():
                 if update_task_status_result['status'] == 'success':
                     print('Update to ICMS success')
                 else:
-                    print('Update to ICMS failed')
+                    error = update_task_status_result['message']
+                    print(f'Update to ICMS failed- error: {error}')
     else:
-        print('Get list task form ICMS failed')
+        error = get_list_task_result['message']
+        print(f'Get list task form ICMS failed - error: {error}')
                         
 if __name__ == "__main__":
-    while True:
-        main()
-        time.sleep(60)
+    main()
