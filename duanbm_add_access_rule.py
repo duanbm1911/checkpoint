@@ -183,7 +183,7 @@ def check_network_object(session, network, list_errors):
 def check_domain_object(session, domain, list_errors):
     get_all_domains = session.gen_api_query("show-dns-domains", details_level="full")
     for item in get_all_domains:
-        getlist = [i['name'] for i in item.data['objects'] if domain == i['name']]
+        getlist = [i['name'] for i in item.data['objects'] if domain.lower() == i['name'].lower()]
     if len(getlist) > 0:
         return getlist[0]
     else:
@@ -256,6 +256,16 @@ def main():
                         schedule = item[6]
                         policy_layer = f'{policy} {layer}'
                         list_errors = list()
+                        update_task_status_result = update_task_status(
+                            icms_username=icms_username,
+                            icms_password=icms_password,
+                            icms_url=icms_url,
+                            rule_id=rule_id,
+                            status='Processing',
+                            message=''
+                        )
+                        if update_task_status_result['status'] == 'failed':
+                            list_errors.append("Update task status: Processing to ICMS failed")
                         if session.check_fingerprint() is False:
                             list_errors.append("Check connectivity with the server")
                         else:
