@@ -1,3 +1,0 @@
-{
-    "ec2-122-248-194-95.ap-southeast-1.compute.amazonaws.com": "55820CAA33D7E56F1AC197E52571D6798B4C19B9"
-}
